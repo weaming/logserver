@@ -24,6 +24,7 @@ from aionotify import Watcher, Flags
 from aiofile import AIOFile, LineReader
 from fastapi import FastAPI
 from starlette.responses import Response
+from starlette.status import HTTP_404_NOT_FOUND
 from starlette.websockets import WebSocket
 
 app = FastAPI()
