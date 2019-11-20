@@ -1,7 +1,5 @@
-FROM python:3.7-alpine
-WORKDIR /app
-RUN chown -R nobody /app
-RUN apk add --no-cache gcc libc-dev
-COPY . .
+FROM tiangolo/uvicorn-gunicorn:python3.7
+COPY . /app
+
 RUN pip install -r server/requirements.txt
-CMD ["./server/server.py"]
+ENV MODULE_NAME server.server

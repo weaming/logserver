@@ -20,61 +20,44 @@ from pathlib import Path
 from contextlib import closing
 from asyncio import get_event_loop
 
-from aiohttp import web
 from aionotify import Watcher, Flags
 from aiofile import AIOFile, LineReader
+from fastapi import FastAPI
+from starlette.responses import Response
+from starlette.websockets import WebSocket
+
+app = FastAPI()
 
 
-async def handle(request):
-
+@app.websocket('/follow/{filename}')
+async def handle(filename: str, response: Response, websocket: WebSocket, n: int = 1):
     # Check file exists
-    rawfn = request.match_info.get('filename', None)
-
-    if not rawfn:
-        raise web.HTTPBadRequest(
-            reason='Filename must be specified'
-        )
-
-    cleanfn = Path(rawfn).name
+    cleanfn = Path(filename).name
     fnpath = Path().cwd() / cleanfn
 
     if not fnpath.is_file():
-        raise web.HTTPNotFound(reason='File {} not found'.format(rawfn))
+        response.status_code = HTTP_404_NOT_FOUND
+        return
 
-    # Send websocket response
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
+    await websocket.accept()
 
     # Create watcher for file
     with closing(Watcher()) as watcher:
         watcher.watch(path=str(fnpath), flags=Flags.MODIFY)
-
         await watcher.setup(get_event_loop())
-        print('Watcher created for "{}"'.format(fnpath))
 
         async with AIOFile(fnpath, mode='r', encoding='utf-8') as afd:
-            print('Sending lines!')
             reader = LineReader(afd)
-
+            i = 0
             async for line in reader:
-                print(line, end='')
-                await ws.send_str(line)
+                i += 1
+                # print(line, end='')
+                if i >= n:
+                    await websocket.send_text(line)
 
             while True:
                 event = await watcher.get_event()
-                print('Got event! {}'.format(event))
+                print('Got event: {} {}'.format(filename, event))
                 async for line in reader:
-                    print(line, end='')
-                    await ws.send_str(line)
-
-    return ws
-
-
-app = web.Application()
-app.add_routes([
-    web.get('/follow/{filename}', handle),
-])
-
-
-if __name__ == '__main__':
-    web.run_app(app, port=9292)
+                    # print(line, end='')
+                    await websocket.send_text(line)
